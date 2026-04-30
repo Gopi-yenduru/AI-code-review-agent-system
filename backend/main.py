@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
-from database import get_db
+from database import init_db, dispose_engine
 from models.review import Review
 
 

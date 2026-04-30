@@ -18,7 +18,8 @@ pydantic-settings==2.7.0
 python-dotenv==1.0.1
 
 # --- LLM / AI Agents ---
-langchain-google-genai==2.0.7
+langchain-google-genai>=3.0.0
+google-genai
 langchain-core==0.3.28
 langgraph==0.2.60
 
