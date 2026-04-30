@@ -19,21 +19,10 @@ FROM nginx:alpine AS production
 # Copy built assets
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Nginx config for SPA routing
-RUN echo 'server { \
-    listen 3000; \
-    root /usr/share/nginx/html; \
-    index index.html; \
-    location / { \
-        try_files $uri $uri/ /index.html; \
-    } \
-    location /api { \
-        proxy_pass http://backend:8000; \
-        proxy_set_header Host $host; \
-        proxy_set_header X-Real-IP $remote_addr; \
-    } \
-}' > /etc/nginx/conf.d/default.conf
+# Nginx config for SPA routing with environment variable substitution
+COPY nginx.conf /etc/nginx/templates/default.conf.template
+ENV BACKEND_URL=http://localhost:8000
 
-EXPOSE 3000
+EXPOSE 80
 
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["/bin/sh", "-c", "envsubst '$BACKEND_URL' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
