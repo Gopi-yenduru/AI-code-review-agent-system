@@ -9,11 +9,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.config import get_settings
-from backend.database import init_db, dispose_engine
-
-# Import models so they register with Base.metadata
-import backend.models  # noqa: F401
+from config import get_settings
+from database import get_db
+from models.review import Review
 
 
 # ---------------------------------------------------------------------------
@@ -81,9 +79,9 @@ app.add_middleware(
 )
 
 # --- Include Routers ---
-from backend.routers.webhook import router as webhook_router
-from backend.routers.reviews import router as reviews_router
-from backend.routers.analytics import router as analytics_router
+from routers.webhook import router as webhook_router
+from routers.reviews import router as reviews_router
+from routers.analytics import router as analytics_router
 
 app.include_router(webhook_router, prefix=settings.API_PREFIX)
 app.include_router(reviews_router, prefix=settings.API_PREFIX)

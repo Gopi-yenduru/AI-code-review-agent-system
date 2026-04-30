@@ -11,7 +11,7 @@ from typing import Any
 
 from github import Github, GithubException
 
-from backend.config import get_settings
+from config import get_settings
 
 logger = logging.getLogger("ai_code_review.services.github")
 

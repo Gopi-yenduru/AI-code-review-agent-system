@@ -11,7 +11,7 @@ from typing import Any
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
-from backend.config import get_settings
+from config import get_settings
 
 logger = logging.getLogger("ai_code_review.agents.performance")
 

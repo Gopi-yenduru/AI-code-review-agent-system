@@ -10,7 +10,7 @@ from sqlalchemy import String, Float, Integer, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
 
-from backend.database import Base
+from database import Base
 
 
 class Developer(Base):

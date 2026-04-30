@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase
 from typing import AsyncGenerator
 
-from backend.config import get_settings
+from config import get_settings
 
 
 class Base(DeclarativeBase):

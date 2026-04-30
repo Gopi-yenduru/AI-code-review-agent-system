@@ -10,10 +10,10 @@ from typing import Any
 from fastapi import APIRouter, Request, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.config import get_settings
-from backend.database import get_db
-from backend.services.github_service import verify_webhook_signature, get_pr_diff, post_pr_comment
-from backend.services.review_service import run_review
+from config import get_settings
+from database import get_db
+from services.github_service import verify_webhook_signature, get_pr_diff, post_pr_comment
+from services.review_service import run_review
 
 logger = logging.getLogger("ai_code_review.routers.webhook")
 

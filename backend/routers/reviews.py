@@ -11,8 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, desc, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.database import get_db
-from backend.models.review import Review, Issue, ReviewStatus
+from database import get_db
+from models.review import Review, Issue, ReviewStatus
 
 logger = logging.getLogger("ai_code_review.routers.reviews")
 

@@ -10,9 +10,9 @@ from typing import Any, Annotated, TypedDict
 
 from langgraph.graph import StateGraph, START, END
 
-from backend.agents.security_agent import run_security_agent
-from backend.agents.performance_agent import run_performance_agent
-from backend.agents.quality_agent import run_quality_agent
+from agents.security_agent import run_security_agent
+from agents.performance_agent import run_performance_agent
+from agents.quality_agent import run_quality_agent
 
 logger = logging.getLogger("ai_code_review.agents.graph")
 

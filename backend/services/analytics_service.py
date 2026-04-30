@@ -11,8 +11,8 @@ from datetime import datetime, timezone, timedelta
 from sqlalchemy import select, func, desc, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models.review import Review, Issue, AgentType, Severity, ReviewStatus
-from backend.models.user import Developer
+from models.review import Review, Issue, AgentType, Severity, ReviewStatus
+from models.user import Developer
 
 logger = logging.getLogger("ai_code_review.services.analytics")
 

@@ -9,8 +9,8 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.database import get_db
-from backend.services.analytics_service import (
+from database import get_db
+from services.analytics_service import (
     get_developer_stats,
     get_repo_stats,
     get_overview_stats,
