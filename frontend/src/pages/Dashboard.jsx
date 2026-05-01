@@ -7,7 +7,7 @@ import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart,
 } from 'recharts';
-import { fetchOverviewStats, fetchReviews } from '../api/client';
+import { fetchOverviewStats } from '../api/client';
 import RiskScoreCard from '../components/RiskScoreCard';
 
 /* ── Severity badge inline ─────────────────────────────────── */
@@ -64,52 +64,23 @@ function ChartTooltip({ active, payload, label }) {
   );
 }
 
-/* ── MOCK DATA for demo (used when API unavailable) ────────── */
-const MOCK_STATS = {
-  total_reviews: 147,
-  avg_risk_score: 34.2,
-  total_critical_issues: 23,
-  daily_trend: Array.from({ length: 30 }, (_, i) => ({
-    date: new Date(Date.now() - (29 - i) * 86400000).toISOString().split('T')[0],
-    count: Math.floor(Math.random() * 8) + 1,
-    avg_risk: Math.floor(Math.random() * 60) + 10,
-  })),
-  weekly_issues: [
-    { agent_type: 'security', severity: 'critical', count: 8 },
-    { agent_type: 'security', severity: 'high', count: 12 },
-    { agent_type: 'performance', severity: 'high', count: 9 },
-    { agent_type: 'performance', severity: 'medium', count: 15 },
-    { agent_type: 'quality', severity: 'medium', count: 22 },
-    { agent_type: 'quality', severity: 'low', count: 18 },
-  ],
-  recent_reviews: Array.from({ length: 10 }, (_, i) => ({
-    review_id: `demo-${i}`,
-    pr_title: ['Fix auth middleware', 'Add pagination support', 'Refactor user service', 'Update DB schema', 'Add caching layer', 'Fix N+1 queries', 'Add input validation', 'Migrate to async', 'Add error handling', 'Update dependencies'][i],
-    pr_number: 100 + i,
-    repo_name: i % 2 === 0 ? 'acme/backend-api' : 'acme/web-client',
-    author: ['alice', 'bob', 'charlie', 'diana', 'eve'][i % 5],
-    risk_score: Math.floor(Math.random() * 80) + 5,
-    quality_score: Math.floor(Math.random() * 40) + 60,
-    created_at: new Date(Date.now() - i * 3600000 * 6).toISOString(),
-  })),
-};
-
 /* ── Dashboard Component ───────────────────────────────────── */
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     async function load() {
       try {
         const res = await fetchOverviewStats();
-        if (res.success && res.data.total_reviews > 0) {
+        if (res.success) {
           setStats(res.data);
         } else {
-          setStats(MOCK_STATS);
+          setError(true);
         }
       } catch {
-        setStats(MOCK_STATS);
+        setError(true);
       } finally {
         setLoading(false);
       }
@@ -131,7 +102,18 @@ export default function Dashboard() {
     );
   }
 
-  const d = stats;
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-6 pt-24">
+        <div className="glass-card p-10 text-center text-red-400">
+          <h2 className="text-xl font-bold mb-2">Failed to load data</h2>
+          <p>Please check if the backend API is running.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const d = stats || {};
   const barData = (d.weekly_issues || []).map(w => ({
     name: `${w.agent_type}\n${w.severity}`,
     count: w.count,
@@ -140,6 +122,10 @@ export default function Dashboard() {
       : w.severity === 'medium' ? '#eab308'
       : '#22c55e',
   }));
+
+  const hasTrendData = d.daily_trend && d.daily_trend.length > 0;
+  const hasIssuesData = barData && barData.length > 0;
+  const hasRecentReviews = d.recent_reviews && d.recent_reviews.length > 0;
 
   return (
     <div className="max-w-7xl mx-auto px-6 pt-24 pb-12">
@@ -156,11 +142,11 @@ export default function Dashboard() {
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-        <StatCard icon="📝" label="Total Reviews" value={d.total_reviews} accent="#3b82f6" delay={1} />
-        <StatCard icon="📊" label="Avg Risk Score" value={d.avg_risk_score?.toFixed(1)} accent="#f97316" delay={1} />
-        <StatCard icon="🚨" label="Critical Issues" value={d.total_critical_issues} accent="#ef4444" delay={2} />
+        <StatCard icon="📝" label="Total Reviews" value={d.total_reviews || 0} accent="#3b82f6" delay={1} />
+        <StatCard icon="📊" label="Avg Risk Score" value={(d.avg_risk_score || 0).toFixed(1)} accent="#f97316" delay={1} />
+        <StatCard icon="🚨" label="Critical Issues" value={d.total_critical_issues || 0} accent="#ef4444" delay={2} />
         <StatCard icon="✅" label="Reviews Today" value={
-          (d.daily_trend || []).filter(t => t.date === new Date().toISOString().split('T')[0]).reduce((a, t) => a + t.count, 0) || '—'
+          (d.daily_trend || []).filter(t => t.date === new Date().toISOString().split('T')[0]).reduce((a, t) => a + t.count, 0) || 0
         } accent="#22c55e" delay={3} />
       </div>
 
@@ -171,22 +157,28 @@ export default function Dashboard() {
           <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--color-text-secondary)' }}>
             📈 Risk Score Trend — Last 30 Days
           </h2>
-          <ResponsiveContainer width="100%" height={240}>
-            <AreaChart data={d.daily_trend || []}>
-              <defs>
-                <linearGradient id="riskGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={v => v.slice(5)} />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
-              <Tooltip content={<ChartTooltip />} />
-              <Area type="monotone" dataKey="avg_risk" name="Avg Risk"
-                stroke="#3b82f6" fill="url(#riskGradient)" strokeWidth={2} />
-            </AreaChart>
-          </ResponsiveContainer>
+          {!hasTrendData ? (
+             <div className="flex items-center justify-center h-[240px]" style={{ color: 'var(--color-text-muted)' }}>
+                No data yet
+             </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={240}>
+              <AreaChart data={d.daily_trend}>
+                <defs>
+                  <linearGradient id="riskGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={v => v.slice(5)} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
+                <Tooltip content={<ChartTooltip />} />
+                <Area type="monotone" dataKey="avg_risk" name="Avg Risk"
+                  stroke="#3b82f6" fill="url(#riskGradient)" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </div>
 
         {/* Issues This Week */}
@@ -194,19 +186,25 @@ export default function Dashboard() {
           <h2 className="text-sm font-semibold mb-4" style={{ color: 'var(--color-text-secondary)' }}>
             📊 Issues This Week — By Type
           </h2>
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={barData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" tick={{ fontSize: 9 }} />
-              <YAxis tick={{ fontSize: 10 }} />
-              <Tooltip content={<ChartTooltip />} />
-              <Bar dataKey="count" name="Issues" radius={[4, 4, 0, 0]}>
-                {barData.map((entry, idx) => (
-                  <rect key={idx} fill={entry.fill} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          {!hasIssuesData ? (
+             <div className="flex items-center justify-center h-[240px]" style={{ color: 'var(--color-text-muted)' }}>
+                No data yet
+             </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={barData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+                <YAxis tick={{ fontSize: 10 }} />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar dataKey="count" name="Issues" radius={[4, 4, 0, 0]}>
+                  {barData.map((entry, idx) => (
+                    <rect key={idx} fill={entry.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </div>
 
@@ -218,62 +216,68 @@ export default function Dashboard() {
           </h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                {['PR Title', 'Author', 'Repository', 'Risk Score', 'Time'].map(h => (
-                  <th key={h} className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider"
-                    style={{ color: 'var(--color-text-muted)' }}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {(d.recent_reviews || []).map((r, i) => (
-                <tr key={r.review_id}
-                  className="transition-colors duration-150"
-                  style={{
-                    borderBottom: '1px solid var(--color-border)',
-                    cursor: 'pointer',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(59,130,246,0.04)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                >
-                  <td className="px-5 py-3">
-                    <Link to={`/reviews/${r.review_id}`}
-                      className="font-medium no-underline hover:underline"
-                      style={{ color: 'var(--color-accent-blue)' }}>
-                      {r.pr_title}
-                    </Link>
-                    <span className="text-xs ml-2 font-mono" style={{ color: 'var(--color-text-muted)' }}>
-                      #{r.pr_number}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3">
-                    <Link to={`/developer/${r.author}`}
-                      className="no-underline"
-                      style={{ color: 'var(--color-text-secondary)' }}>
-                      @{r.author}
-                    </Link>
-                  </td>
-                  <td className="px-5 py-3 font-mono text-xs"
-                    style={{ color: 'var(--color-text-muted)' }}>
-                    {r.repo_name}
-                  </td>
-                  <td className="px-5 py-3">
-                    <RiskBadge score={r.risk_score} />
-                  </td>
-                  <td className="px-5 py-3 text-xs"
-                    style={{ color: 'var(--color-text-muted)' }}>
-                    {new Date(r.created_at).toLocaleDateString('en-US', {
-                      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                    })}
-                  </td>
+          {!hasRecentReviews ? (
+            <div className="p-10 text-center" style={{ color: 'var(--color-text-muted)' }}>
+              No reviews yet. Open a Pull Request to trigger your first AI review.
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                  {['PR Title', 'Author', 'Repository', 'Risk Score', 'Time'].map(h => (
+                    <th key={h} className="text-left px-5 py-3 text-xs font-semibold uppercase tracking-wider"
+                      style={{ color: 'var(--color-text-muted)' }}>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {d.recent_reviews.map((r) => (
+                  <tr key={r.review_id}
+                    className="transition-colors duration-150"
+                    style={{
+                      borderBottom: '1px solid var(--color-border)',
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(59,130,246,0.04)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <td className="px-5 py-3">
+                      <Link to={`/reviews/${r.review_id}`}
+                        className="font-medium no-underline hover:underline"
+                        style={{ color: 'var(--color-accent-blue)' }}>
+                        {r.pr_title}
+                      </Link>
+                      <span className="text-xs ml-2 font-mono" style={{ color: 'var(--color-text-muted)' }}>
+                        #{r.pr_number}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      <Link to={`/developer/${r.author}`}
+                        className="no-underline"
+                        style={{ color: 'var(--color-text-secondary)' }}>
+                        @{r.author}
+                      </Link>
+                    </td>
+                    <td className="px-5 py-3 font-mono text-xs"
+                      style={{ color: 'var(--color-text-muted)' }}>
+                      {r.repo_name}
+                    </td>
+                    <td className="px-5 py-3">
+                      <RiskBadge score={r.risk_score} />
+                    </td>
+                    <td className="px-5 py-3 text-xs"
+                      style={{ color: 'var(--color-text-muted)' }}>
+                      {new Date(r.created_at).toLocaleDateString('en-US', {
+                        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                      })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>

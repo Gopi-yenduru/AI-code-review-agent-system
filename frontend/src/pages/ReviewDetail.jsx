@@ -7,71 +7,23 @@ import { fetchReviewById } from '../api/client';
 import RiskScoreCard from '../components/RiskScoreCard';
 import AgentResultPanel from '../components/AgentResultPanel';
 
-/* ── MOCK DATA ─────────────────────────────────────────────── */
-const MOCK_REVIEW = {
-  id: 'demo-1',
-  pr_url: 'https://github.com/acme/backend-api/pull/142',
-  repo_name: 'acme/backend-api',
-  pr_number: 142,
-  pr_title: 'Add user authentication middleware',
-  author: 'alice',
-  overall_risk_score: 62,
-  quality_score: 71,
-  quality_highlights: [
-    'Good separation of concerns between auth middleware and route handlers',
-    'Consistent error response format across endpoints',
-  ],
-  status: 'completed',
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-  agents: {
-    security: {
-      count: 3,
-      issues: [
-        { id: 's1', severity: 'critical', description: 'JWT secret is hardcoded as "mysecret123" in the auth middleware', line_number: 15, file_path: 'middleware/auth.py', suggestion: 'Move the JWT secret to environment variables: jwt_secret = os.environ["JWT_SECRET"]' },
-        { id: 's2', severity: 'high', description: 'No rate limiting on the login endpoint — vulnerable to brute force attacks', line_number: 42, file_path: 'routes/auth.py', suggestion: 'Add rate limiting using slowapi or a custom middleware: @limiter.limit("5/minute")' },
-        { id: 's3', severity: 'medium', description: 'Password is logged in debug mode', line_number: 28, file_path: 'routes/auth.py', suggestion: 'Remove password from log statements or mask sensitive fields' },
-      ],
-    },
-    performance: {
-      count: 2,
-      issues: [
-        { id: 'p1', severity: 'high', description: 'User lookup queries the database on every request without caching', line_number: 20, file_path: 'middleware/auth.py', suggestion: 'Cache user lookups with a short TTL: @cache(ttl=300)' },
-        { id: 'p2', severity: 'medium', description: 'Token validation uses synchronous cryptography in async handler', line_number: 18, file_path: 'middleware/auth.py', suggestion: 'Use run_in_threadpool() for CPU-bound crypto operations' },
-      ],
-    },
-    quality: {
-      count: 2,
-      score: 71,
-      highlights: [
-        'Good separation of concerns between auth middleware and route handlers',
-        'Consistent error response format across endpoints',
-      ],
-      issues: [
-        { id: 'q1', severity: 'medium', description: 'Function authenticate_user() has 45 lines — consider splitting into smaller functions', line_number: 10, file_path: 'middleware/auth.py', suggestion: 'Extract token extraction, validation, and user lookup into separate functions' },
-        { id: 'q2', severity: 'low', description: 'Missing type hints on function parameters', line_number: 10, file_path: 'middleware/auth.py', suggestion: 'Add type annotations: def authenticate_user(request: Request) -> User:' },
-      ],
-    },
-  },
-  total_issues: 7,
-};
-
 export default function ReviewDetail() {
   const { id } = useParams();
   const [review, setReview] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     async function load() {
       try {
         const res = await fetchReviewById(id);
-        if (res.success) {
+        if (res.success && res.data) {
           setReview(res.data);
         } else {
-          setReview(MOCK_REVIEW);
+          setError(true);
         }
       } catch {
-        setReview(MOCK_REVIEW);
+        setError(true);
       } finally {
         setLoading(false);
       }
@@ -90,12 +42,29 @@ export default function ReviewDetail() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-6 pt-24">
+        <div className="glass-card p-10 text-center text-red-400">
+          <h2 className="text-xl font-bold mb-2">Failed to load data</h2>
+          <p>Please check if the backend API is running.</p>
+          <div className="mt-6">
+            <Link to="/" style={{ color: 'var(--color-accent-blue)' }}>← Back to Dashboard</Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!review) {
     return (
       <div className="max-w-7xl mx-auto px-6 pt-24 text-center">
         <span className="text-4xl block mb-4">🔍</span>
-        <h2 className="text-xl font-semibold mb-2">Review Not Found</h2>
-        <Link to="/" style={{ color: 'var(--color-accent-blue)' }}>← Back to Dashboard</Link>
+        <h2 className="text-xl font-semibold mb-2">No reviews yet</h2>
+        <p style={{ color: 'var(--color-text-muted)' }}>Could not find review with this ID.</p>
+        <div className="mt-6">
+          <Link to="/" style={{ color: 'var(--color-accent-blue)' }}>← Back to Dashboard</Link>
+        </div>
       </div>
     );
   }
@@ -171,7 +140,7 @@ export default function ReviewDetail() {
         <div className="flex items-center gap-6 mt-5 pt-4"
           style={{ borderTop: '1px solid var(--color-border)' }}>
           <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-            Total Issues: <span className="font-semibold" style={{ color: 'var(--color-text-primary)' }}>{r.total_issues}</span>
+            Total Issues: <span className="font-semibold" style={{ color: 'var(--color-text-primary)' }}>{r.total_issues || 0}</span>
           </span>
           <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
             Security: <span className="font-semibold" style={{ color: '#ef4444' }}>{agents.security?.count || 0}</span>
