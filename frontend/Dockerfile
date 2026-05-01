@@ -25,4 +25,4 @@ ENV BACKEND_URL=http://localhost:8000
 
 EXPOSE 80
 
-CMD ["/bin/sh", "-c", "envsubst '$BACKEND_URL' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
+CMD ["/bin/sh", "-c", "envsubst '$BACKEND_URL' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && echo \"window.APP_CONFIG = { apiUrl: '${BACKEND_URL}' };\" > /usr/share/nginx/html/config.js && nginx -g 'daemon off;'"]

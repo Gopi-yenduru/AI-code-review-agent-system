@@ -1,7 +1,9 @@
 /**
  * API client for the AI Code Review Agent backend.
  */
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const BASE_URL = window.APP_CONFIG?.apiUrl && window.APP_CONFIG.apiUrl !== '__API_URL__'
+  ? window.APP_CONFIG.apiUrl 
+  : (import.meta.env.VITE_API_URL || 'http://localhost:8000');
 console.log("API BASE URL:", BASE_URL);
 
 async function request(endpoint, options = {}) {
