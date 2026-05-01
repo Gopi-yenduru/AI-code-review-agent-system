@@ -4,9 +4,12 @@ Analyzes code diffs for performance issues including N+1 queries,
 inefficient loops, unnecessary DB calls, high complexity, and memory leaks.
 """
 
+import os
 import json
 import logging
 from typing import Any
+
+model_name = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -119,7 +122,7 @@ async def run_performance_agent(code_diff: str, pr_title: str, repo_name: str) -
 
     try:
         llm = ChatGoogleGenerativeAI(
-            model=settings.GEMINI_MODEL,
+            model=model_name,
             google_api_key=settings.GEMINI_API_KEY,
             temperature=settings.GEMINI_TEMPERATURE,
             max_output_tokens=settings.GEMINI_MAX_TOKENS,
