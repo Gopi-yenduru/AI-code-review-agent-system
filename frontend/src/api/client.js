@@ -1,32 +1,40 @@
 /**
- * Axios API client for the AI Code Review Agent backend.
- * All requests go through /api/v1 prefix.
+ * API client for the AI Code Review Agent backend.
  */
-import axios from 'axios';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+console.log("API BASE URL:", BASE_URL);
 
-const API_BASE = '/api/v1';
-
-const client = axios.create({
-  baseURL: API_BASE,
-  headers: { 'Content-Type': 'application/json' },
-  timeout: 30000,
-});
+async function request(endpoint, options = {}) {
+  const url = `${BASE_URL}/api/v1${endpoint}`;
+  try {
+    const response = await fetch(url, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    });
+    
+    if (!response.ok) {
+      console.error("API error:", response.status, await response.text());
+      return { success: false, _error: "API error" };
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error(`Fetch failed for ${endpoint}:`, error);
+    throw error;
+  }
+}
 
 // ── Reviews ──────────────────────────────────────────────────
-export const fetchReviews = (params = {}) =>
-  client.get('/reviews', { params }).then(r => r.data);
+export const fetchReviews = (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/reviews${qs ? `?${qs}` : ''}`);
+};
 
-export const fetchReviewById = (id) =>
-  client.get(`/reviews/${id}`).then(r => r.data);
+export const fetchReviewById = (id) => request(`/reviews/${id}`);
 
 // ── Analytics ────────────────────────────────────────────────
-export const fetchOverviewStats = () =>
-  client.get('/analytics/overview').then(r => r.data);
+export const fetchOverviewStats = () => request('/analytics/overview');
 
-export const fetchDeveloperStats = (username) =>
-  client.get(`/analytics/developer/${username}`).then(r => r.data);
+export const fetchDeveloperStats = (username) => request(`/analytics/developer/${username}`);
 
-export const fetchRepoStats = (repoName) =>
-  client.get(`/analytics/repo/${repoName}`).then(r => r.data);
-
-export default client;
+export const fetchRepoStats = (repoName) => request(`/analytics/repo/${repoName}`);

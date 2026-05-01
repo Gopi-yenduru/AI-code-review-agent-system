@@ -79,7 +79,8 @@ export default function Dashboard() {
         } else {
           setError(true);
         }
-      } catch {
+      } catch (err) {
+        console.error("Dashboard fetch failed:", err);
         setError(true);
       } finally {
         setLoading(false);
