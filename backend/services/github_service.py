@@ -95,6 +95,14 @@ def get_pr_diff(repo_name: str, pr_number: int) -> str:
 # PR Comment Posting
 # ---------------------------------------------------------------------------
 
+AGENT_LABELS = {
+    "security": "🔒 Security Auditor",
+    "performance": "⚡ Performance Analyst",
+    "quality": "📋 Code Quality Judge",
+}
+
+AGENT_FAILED_MESSAGE = "⚠️ This agent failed to run — no results available."
+
 def format_review_comment(review_result: dict[str, Any]) -> str:
     """
     Format the multi-agent review result into a structured GitHub PR comment.
@@ -104,9 +112,16 @@ def format_review_comment(review_result: dict[str, Any]) -> str:
     security = review_result.get("security", {})
     performance = review_result.get("performance", {})
     quality = review_result.get("quality", {})
+    failed_agents = review_result.get("failed_agents", [])
+
+    # The risk score is built from security + performance findings only
+    risk_incomplete = any(a in failed_agents for a in ("security", "performance"))
 
     # Risk badge color
-    if risk_score >= 75:
+    if risk_incomplete:
+        badge = "⚠️"
+        risk_label = "INCOMPLETE"
+    elif risk_score >= 75:
         badge = "🔴"
         risk_label = "CRITICAL"
     elif risk_score >= 50:
@@ -124,6 +139,15 @@ def format_review_comment(review_result: dict[str, Any]) -> str:
         f"## {badge} AI Code Review — Risk Score: {risk_score}/100 ({risk_label})",
         "",
     ]
+
+    if failed_agents:
+        failed_names = ", ".join(AGENT_LABELS.get(a, a) for a in failed_agents)
+        lines.append(
+            f"> ⚠️ **Incomplete review:** {failed_names} failed to run, so issues may be missing"
+            + (" and the risk score may be understated." if risk_incomplete else ".")
+            + " Push a new commit to re-run the review."
+        )
+        lines.append("")
 
     # --- Critical Issues Table ---
     all_issues = []
@@ -144,7 +168,7 @@ def format_review_comment(review_result: dict[str, Any]) -> str:
         for issue in critical_issues:
             sev = issue.get("severity", "").upper()
             desc = issue.get("description", "")[:80]
-            line = issue.get("line_number", "—")
+            line = issue.get("line_number") or "—"
             sugg = issue.get("suggestion", "")[:80]
             lines.append(f"| {issue['agent']} | **{sev}** | {desc} | {line} | {sugg} |")
         lines.append("")
@@ -160,6 +184,8 @@ def format_review_comment(review_result: dict[str, Any]) -> str:
             lines.append(f"- **[{sev}]** {issue.get('description', '')}")
             if issue.get("suggestion"):
                 lines.append(f"  - 💡 {issue['suggestion']}")
+    elif "security" in failed_agents:
+        lines.append(AGENT_FAILED_MESSAGE)
     else:
         lines.append("✅ No security issues found.")
     lines.append("")
@@ -177,6 +203,8 @@ def format_review_comment(review_result: dict[str, Any]) -> str:
             lines.append(f"- **[{sev}]** {issue.get('description', '')}")
             if issue.get("suggestion"):
                 lines.append(f"  - 💡 {issue['suggestion']}")
+    elif "performance" in failed_agents:
+        lines.append(AGENT_FAILED_MESSAGE)
     else:
         lines.append("✅ No performance issues found.")
     lines.append("")
@@ -184,7 +212,9 @@ def format_review_comment(review_result: dict[str, Any]) -> str:
     lines.append("")
 
     # --- Quality Agent Summary ---
-    quality_score = quality.get("score", "N/A")
+    quality_score = quality.get("score")
+    if quality_score is None:
+        quality_score = "N/A"
     quality_issues = quality.get("issues", [])
     highlights = quality.get("highlights", [])
     lines.append("<details>")
@@ -202,6 +232,8 @@ def format_review_comment(review_result: dict[str, Any]) -> str:
             lines.append(f"- **[{sev}]** {issue.get('description', '')}")
             if issue.get("suggestion"):
                 lines.append(f"  - 💡 {issue['suggestion']}")
+    elif "quality" in failed_agents:
+        lines.append(AGENT_FAILED_MESSAGE)
     else:
         lines.append("✅ No quality issues found.")
     lines.append("")

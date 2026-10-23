@@ -3,30 +3,31 @@
 # =============================================================================
 
 # --- Web Framework ---
-fastapi==0.115.6
-uvicorn[standard]==0.32.1
-python-multipart==0.0.17
+fastapi==0.161.1
+uvicorn[standard]==0.54.0
+python-multipart==0.0.32
 
 # --- Database ---
-sqlalchemy[asyncio]==2.0.36
-asyncpg==0.30.0
-greenlet==3.1.1
+sqlalchemy[asyncio]==2.0.55
+asyncpg==0.32.0
+greenlet==3.5.6
 
 # --- Configuration ---
-pydantic==2.10.3
-pydantic-settings==2.7.0
-python-dotenv==1.0.1
+pydantic==2.14.1
+pydantic-settings==2.16.1
+python-dotenv==1.2.4
 
 # --- LLM / AI Agents ---
-langchain-google-genai==2.0.7
-langchain-core==0.3.28
-langgraph==0.2.60
+# 4.x is built on the google-genai SDK (2.x used the discontinued google-generativeai)
+langchain-google-genai==4.4.2
+langchain-core==1.7.0
+langgraph==1.2.16
 
 # --- GitHub Integration ---
-PyGithub==2.5.0
+PyGithub==2.10.0
 
 # --- HTTP Client ---
 httpx==0.28.1
 
 # --- Utilities ---
-python-dateutil==2.9.0
+python-dateutil==3.0.0

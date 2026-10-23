@@ -71,6 +71,11 @@ export default function ReviewDetail() {
 
   const r = review;
   const agents = r.agents || {};
+  const statusStyle = r.status === 'completed'
+    ? { bg: 'rgba(34,197,94,0.12)', color: '#86efac', border: 'rgba(34,197,94,0.3)' }
+    : r.status === 'failed'
+      ? { bg: 'rgba(239,68,68,0.12)', color: '#fca5a5', border: 'rgba(239,68,68,0.3)' }
+      : { bg: 'rgba(234,179,8,0.12)', color: '#fde047', border: 'rgba(234,179,8,0.3)' };
 
   return (
     <div className="max-w-7xl mx-auto px-6 pt-24 pb-12">
@@ -92,9 +97,9 @@ export default function ReviewDetail() {
             <div className="flex items-center gap-3 mb-2">
               <span className="text-xs px-2 py-1 rounded-md font-mono"
                 style={{
-                  background: r.status === 'completed' ? 'rgba(34,197,94,0.12)' : 'rgba(234,179,8,0.12)',
-                  color: r.status === 'completed' ? '#86efac' : '#fde047',
-                  border: `1px solid ${r.status === 'completed' ? 'rgba(34,197,94,0.3)' : 'rgba(234,179,8,0.3)'}`,
+                  background: statusStyle.bg,
+                  color: statusStyle.color,
+                  border: `1px solid ${statusStyle.border}`,
                 }}>
                 {r.status}
               </span>
@@ -153,6 +158,14 @@ export default function ReviewDetail() {
           </span>
         </div>
       </div>
+
+      {r.status === 'failed' && (
+        <div className="glass-card p-4 mb-6 text-sm animate-fade-in"
+          style={{ border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5' }}>
+          ⚠️ This review is incomplete — one or more agents failed to run, so issues may be
+          missing and the risk score may be understated. Push a new commit to re-run it.
+        </div>
+      )}
 
       {/* Three Agent Panels */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">

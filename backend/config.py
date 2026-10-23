@@ -54,8 +54,8 @@ class Settings(BaseSettings):
 
     # --- LLM Settings ---
     GEMINI_MODEL: str = Field(
-        default="gemini-1.5-pro",
-        description="Gemini model identifier"
+        default="gemini-3.8-flash",
+        description="Gemini model identifier — see https://ai.google.dev/gemini-api/docs/models"
     )
     GEMINI_TEMPERATURE: float = Field(
         default=0.1,

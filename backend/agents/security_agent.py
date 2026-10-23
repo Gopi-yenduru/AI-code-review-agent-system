@@ -4,16 +4,13 @@ Analyzes code diffs for security vulnerabilities including SQL injection,
 hardcoded secrets, XSS, insecure dependencies, and exposed credentials.
 """
 
-import os
-import json
 import logging
 from typing import Any
-
-model_name = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
+from agents.output_parsing import parse_json_object, normalize_issue
 from config import get_settings
 
 logger = logging.getLogger("ai_code_review.agents.security")
@@ -119,7 +116,7 @@ async def run_security_agent(code_diff: str, pr_title: str, repo_name: str) -> d
 
     try:
         llm = ChatGoogleGenerativeAI(
-            model=model_name,
+            model=settings.GEMINI_MODEL,
             google_api_key=settings.GEMINI_API_KEY,
             temperature=settings.GEMINI_TEMPERATURE,
             max_output_tokens=settings.GEMINI_MAX_TOKENS,
@@ -139,37 +136,29 @@ async def run_security_agent(code_diff: str, pr_title: str, repo_name: str) -> d
         ]
 
         response = await llm.ainvoke(messages)
-        raw_content = response.content.strip()
+        result = parse_json_object(response.content)
 
-        # Strip markdown code fences if the model wraps the output
-        if raw_content.startswith("```"):
-            raw_content = raw_content.split("\n", 1)[1]  # Remove first line
-            if raw_content.endswith("```"):
-                raw_content = raw_content[:-3].strip()
+        # A response without an issues list is malformed, not "no issues found"
+        issues = result.get("issues")
+        if not isinstance(issues, list):
+            raise ValueError("Response is missing an 'issues' list")
 
-        result = json.loads(raw_content)
-
-        # Validate structure
-        if "issues" not in result:
-            result = {"issues": []}
-
-        # Validate each issue has required fields
         validated_issues = []
-        for issue in result["issues"]:
-            validated_issues.append({
-                "severity": issue.get("severity", "medium"),
-                "description": issue.get("description", "Security issue detected"),
-                "line_number": issue.get("line_number"),
-                "file_path": issue.get("file_path"),
-                "suggestion": issue.get("suggestion", "Review this code for security concerns"),
-            })
+        for raw_issue in issues:
+            issue = normalize_issue(
+                raw_issue,
+                default_description="Security issue detected",
+                default_suggestion="Review this code for security concerns",
+            )
+            if issue:
+                validated_issues.append(issue)
 
         logger.info(f"Security agent found {len(validated_issues)} issues in {repo_name}")
         return {"issues": validated_issues}
 
-    except json.JSONDecodeError as e:
-        logger.error(f"Security agent returned invalid JSON: {e}")
-        return {"issues": [], "_error": f"JSON parse error: {str(e)}"}
+    except ValueError as e:
+        logger.error(f"Security agent returned invalid output: {e}")
+        return {"issues": [], "_error": f"Invalid model output: {e}"}
     except Exception as e:
         logger.error(f"Security agent failed: {e}")
         return {"issues": [], "_error": str(e)}

@@ -250,10 +250,9 @@ async def get_overview_stats(db: AsyncSession) -> dict[str, Any]:
         for row in weekly_issues_result
     ]
 
-    # Recent reviews
+    # Recent reviews — all statuses, so in-progress and failed reviews stay visible
     recent_result = await db.execute(
         select(Review)
-        .where(Review.status == ReviewStatus.COMPLETED)
         .order_by(desc(Review.created_at))
         .limit(20)
     )
@@ -264,6 +263,7 @@ async def get_overview_stats(db: AsyncSession) -> dict[str, Any]:
             "pr_number": r.pr_number,
             "repo_name": r.repo_name,
             "author": r.author,
+            "status": r.status.value,
             "risk_score": r.overall_risk_score or 0,
             "quality_score": r.quality_score or 0,
             "created_at": r.created_at.isoformat(),

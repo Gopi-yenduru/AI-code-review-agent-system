@@ -42,6 +42,7 @@ class ReviewState(TypedDict):
 
     # Final output
     overall_risk_score: float
+    failed_agents: list[str]
     review_complete: bool
 
 
@@ -89,61 +90,66 @@ async def quality_node(state: ReviewState) -> dict[str, Any]:
 # Merge Node
 # ---------------------------------------------------------------------------
 
+# Fraction of the remaining "safe" headroom that a single issue consumes
+SEVERITY_RISK = {
+    "critical": 0.75,
+    "high": 0.5,
+    "medium": 0.25,
+    "low": 0.05,
+}
+
+AGENT_NAMES = ("security", "performance", "quality")
+
+
 def calculate_risk_score(
     security_issues: list[dict],
     performance_issues: list[dict],
 ) -> float:
     """
-    Calculate overall risk score based on issue severities.
-    Formula: (critical×4 + high×3 + medium×2 + low×1) / max_possible × 100
+    Calculate overall risk score (0-100) from security and performance issues.
+
+    Each issue removes a fraction of the remaining headroom:
+        risk = 100 × (1 − ∏(1 − w_i))
+    with w = critical 0.75, high 0.5, medium 0.25, low 0.05.
+
+    The score only grows as issues are added and never exceeds 100. A single
+    issue lands on its severity's band threshold: one critical → 75 (CRITICAL),
+    one high → 50 (HIGH), one medium → 25 (MEDIUM), one low → 5 (LOW).
     """
-    severity_weights = {
-        "critical": 4,
-        "high": 3,
-        "medium": 2,
-        "low": 1,
-    }
-
-    all_issues = security_issues + performance_issues
-    if not all_issues:
-        return 0.0
-
-    total_weighted = sum(
-        severity_weights.get(issue.get("severity", "low"), 1)
-        for issue in all_issues
-    )
-
-    # Max possible = all issues at critical severity
-    max_possible = len(all_issues) * 4
-    if max_possible == 0:
-        return 0.0
-
-    risk_score = (total_weighted / max_possible) * 100
-    return round(min(100.0, risk_score), 1)
+    safe = 1.0
+    for issue in security_issues + performance_issues:
+        safe *= 1 - SEVERITY_RISK.get(issue.get("severity"), SEVERITY_RISK["medium"])
+    return round((1 - safe) * 100, 1)
 
 
 async def merge_node(state: ReviewState) -> dict[str, Any]:
-    """Merge all agent outputs and calculate the overall risk score."""
+    """Merge all agent outputs, record failed agents, and calculate the overall risk score."""
     logger.info("🔀 Merging agent results...")
 
     security = state.get("security", {"issues": []})
     performance = state.get("performance", {"issues": []})
-    quality = state.get("quality", {"score": 50, "issues": [], "highlights": []})
+    quality = state.get("quality", {"score": None, "issues": [], "highlights": []})
 
     security_issues = security.get("issues", [])
     performance_issues = performance.get("issues", [])
 
     risk_score = calculate_risk_score(security_issues, performance_issues)
 
+    # Agents report failures via "_error" — surface them instead of treating them as clean results
+    failed_agents = [name for name in AGENT_NAMES if state.get(name, {}).get("_error")]
+    if failed_agents:
+        logger.warning(f"⚠️ Agents failed: {', '.join(failed_agents)} — review is incomplete")
+
     logger.info(
         f"✅ Review complete — Risk Score: {risk_score}/100 | "
         f"Security: {len(security_issues)} issues | "
         f"Performance: {len(performance_issues)} issues | "
-        f"Quality: {quality.get('score', 'N/A')}/100"
+        f"Quality: {quality.get('score') if quality.get('score') is not None else 'N/A'}/100"
     )
 
     return {
         "overall_risk_score": risk_score,
+        "failed_agents": failed_agents,
         "review_complete": True,
     }
 
@@ -212,6 +218,7 @@ async def run_review_pipeline(
         "performance": {},
         "quality": {},
         "overall_risk_score": 0.0,
+        "failed_agents": [],
         "review_complete": False,
     }
 
@@ -222,4 +229,5 @@ async def run_review_pipeline(
         "performance": result.get("performance", {}),
         "quality": result.get("quality", {}),
         "overall_risk_score": result.get("overall_risk_score", 0.0),
+        "failed_agents": result.get("failed_agents", []),
     }

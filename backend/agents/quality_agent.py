@@ -3,16 +3,13 @@ Code Quality Judge Agent.
 Evaluates code quality, returning a score (0-100), issues, and highlights.
 """
 
-import os
-import json
 import logging
 from typing import Any
-
-model_name = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
+from agents.output_parsing import parse_json_object, normalize_issue
 from config import get_settings
 
 logger = logging.getLogger("ai_code_review.agents.quality")
@@ -91,7 +88,7 @@ async def run_quality_agent(code_diff: str, pr_title: str, repo_name: str) -> di
 
     try:
         llm = ChatGoogleGenerativeAI(
-            model=model_name,
+            model=settings.GEMINI_MODEL,
             google_api_key=settings.GEMINI_API_KEY,
             temperature=settings.GEMINI_TEMPERATURE,
             max_output_tokens=settings.GEMINI_MAX_TOKENS,
@@ -110,37 +107,40 @@ async def run_quality_agent(code_diff: str, pr_title: str, repo_name: str) -> di
         ]
 
         response = await llm.ainvoke(messages)
-        raw_content = response.content.strip()
+        result = parse_json_object(response.content)
 
-        # Strip markdown code fences if model wraps the output
-        if raw_content.startswith("```"):
-            raw_content = raw_content.split("\n", 1)[1]
-            if raw_content.endswith("```"):
-                raw_content = raw_content[:-3].strip()
+        # The score is the agent's primary output — without it the response is malformed
+        try:
+            score = max(0, min(100, int(float(result["score"]))))
+        except (KeyError, TypeError, ValueError):
+            raise ValueError("Response is missing a numeric 'score'")
 
-        result = json.loads(raw_content)
-
-        # Validate structure
-        score = max(0, min(100, int(result.get("score", 50))))
         issues = result.get("issues", [])
+        if not isinstance(issues, list):
+            raise ValueError("Response 'issues' is not a list")
+
         highlights = result.get("highlights", [])
+        if not isinstance(highlights, list):
+            highlights = []
+        highlights = [str(h) for h in highlights if h]
 
         validated_issues = []
-        for issue in issues:
-            validated_issues.append({
-                "severity": issue.get("severity", "medium"),
-                "description": issue.get("description", "Quality issue detected"),
-                "line_number": issue.get("line_number"),
-                "file_path": issue.get("file_path"),
-                "suggestion": issue.get("suggestion", "Review this code for quality"),
-            })
+        for raw_issue in issues:
+            issue = normalize_issue(
+                raw_issue,
+                default_description="Quality issue detected",
+                default_suggestion="Review this code for quality",
+            )
+            if issue:
+                validated_issues.append(issue)
 
         logger.info(f"Quality agent scored {repo_name} at {score}/100 ({len(validated_issues)} issues)")
         return {"score": score, "issues": validated_issues, "highlights": highlights}
 
-    except json.JSONDecodeError as e:
-        logger.error(f"Quality agent returned invalid JSON: {e}")
-        return {"score": 50, "issues": [], "highlights": [], "_error": str(e)}
+    # On failure, report no score rather than inventing one
+    except ValueError as e:
+        logger.error(f"Quality agent returned invalid output: {e}")
+        return {"score": None, "issues": [], "highlights": [], "_error": f"Invalid model output: {e}"}
     except Exception as e:
         logger.error(f"Quality agent failed: {e}")
-        return {"score": 50, "issues": [], "highlights": [], "_error": str(e)}
+        return {"score": None, "issues": [], "highlights": [], "_error": str(e)}

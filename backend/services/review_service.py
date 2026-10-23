@@ -53,9 +53,11 @@ async def run_review(
         status=ReviewStatus.PROCESSING,
     )
     db.add(review)
-    await db.flush()  # Get the ID without committing
+    # Commit up front so the review is visible while processing and survives a later failure
+    await db.commit()
+    review_id = review.id
 
-    logger.info(f"Created review {review.id} for {repo_name}#{pr_number}")
+    logger.info(f"Created review {review_id} for {repo_name}#{pr_number}")
 
     try:
         # --- Run the agent pipeline ---
@@ -114,33 +116,52 @@ async def run_review(
         review.overall_risk_score = result.get("overall_risk_score", 0.0)
         review.quality_score = quality_data.get("score")
         review.quality_highlights = json.dumps(quality_data.get("highlights", []))
-        review.status = ReviewStatus.COMPLETED
         review.updated_at = datetime.now(timezone.utc)
 
-        # --- Update Developer stats ---
-        await _update_developer_stats(
-            db=db,
-            username=author,
-            risk_score=review.overall_risk_score,
-            security_issues=security_issues,
-            performance_issues=performance_issues,
-            quality_issues=quality_issues,
-        )
+        failed_agents = result.get("failed_agents", [])
+        if failed_agents:
+            # Keep partial findings, but an incomplete review must not read as clean
+            # or drag down the developer's average risk score
+            review.status = ReviewStatus.FAILED
+            logger.warning(f"Review {review_id} incomplete — failed agents: {', '.join(failed_agents)}")
+        else:
+            review.status = ReviewStatus.COMPLETED
+            await _update_developer_stats(
+                db=db,
+                username=author,
+                risk_score=review.overall_risk_score,
+                security_issues=security_issues,
+                performance_issues=performance_issues,
+                quality_issues=quality_issues,
+            )
 
         await db.commit()
-        logger.info(f"Review {review.id} completed — risk score: {review.overall_risk_score}")
+        logger.info(f"Review {review_id} {review.status.value} — risk score: {review.overall_risk_score}")
 
         return {
-            "review_id": str(review.id),
+            "review_id": str(review_id),
             **result,
         }
 
     except Exception as e:
         logger.error(f"Review pipeline failed for {repo_name}#{pr_number}: {e}")
-        review.status = ReviewStatus.FAILED
-        review.updated_at = datetime.now(timezone.utc)
-        await db.commit()
+        # A failed flush leaves the session unusable until it is rolled back
+        await db.rollback()
+        await _mark_review_failed(db, review_id)
         raise
+
+
+async def _mark_review_failed(db: AsyncSession, review_id) -> None:
+    """Best-effort update of a review's status to FAILED after the pipeline errored."""
+    try:
+        review = await db.get(Review, review_id)
+        if review:
+            review.status = ReviewStatus.FAILED
+            review.updated_at = datetime.now(timezone.utc)
+            await db.commit()
+    except Exception as e:
+        logger.error(f"Could not mark review {review_id} as failed: {e}")
+        await db.rollback()
 
 
 async def _update_developer_stats(

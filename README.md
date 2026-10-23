@@ -65,9 +65,9 @@ When a developer opens a PR or pushes code, a webhook triggers three AI agents (
 |--------------------|-----------------------------------------|
 | **Backend**        | Python 3.11, FastAPI, Uvicorn           |
 | **Agent Orchestration** | LangGraph, LangChain             |
-| **LLM**           | Google Gemini 1.5 Pro (free tier)       |
+| **LLM**           | Google Gemini 3.8 Flash (configurable via `GEMINI_MODEL`) |
 | **Database**       | PostgreSQL 15, SQLAlchemy 2.0 (async)  |
-| **Frontend**       | React 18, Vite, Tailwind CSS, Recharts |
+| **Frontend**       | React 19, Vite, Tailwind CSS, Recharts |
 | **GitHub**         | Webhooks, REST API (PyGithub)           |
 | **Containerization** | Docker, Docker Compose               |
 

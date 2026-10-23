@@ -30,6 +30,20 @@ function RiskBadge({ score }) {
   );
 }
 
+/* ── Status badge for reviews without a final risk score ───── */
+function StatusBadge({ status }) {
+  const failed = status === 'failed';
+  return (
+    <span className="badge" style={{
+      color: failed ? '#fca5a5' : '#93c5fd',
+      background: failed ? 'rgba(239,68,68,0.12)' : 'rgba(59,130,246,0.12)',
+      border: `1px solid ${failed ? 'rgba(239,68,68,0.3)' : 'rgba(59,130,246,0.3)'}`,
+    }}>
+      {failed ? '⚠️ Incomplete' : status === 'processing' ? 'Processing…' : status}
+    </span>
+  );
+}
+
 /* ── Stat Card ─────────────────────────────────────────────── */
 function StatCard({ icon, label, value, accent, delay }) {
   return (
@@ -266,7 +280,9 @@ export default function Dashboard() {
                       {r.repo_name}
                     </td>
                     <td className="px-5 py-3">
-                      <RiskBadge score={r.risk_score} />
+                      {!r.status || r.status === 'completed'
+                        ? <RiskBadge score={r.risk_score} />
+                        : <StatusBadge status={r.status} />}
                     </td>
                     <td className="px-5 py-3 text-xs"
                       style={{ color: 'var(--color-text-muted)' }}>

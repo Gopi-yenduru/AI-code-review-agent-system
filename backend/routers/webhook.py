@@ -4,14 +4,14 @@ Receives webhook events from GitHub, verifies signatures,
 and triggers the AI review pipeline for Pull Request events.
 """
 
+import asyncio
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Request, Depends, HTTPException, BackgroundTasks
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
 
 from config import get_settings
-from database import get_db
+from database import async_session_factory
 from services.github_service import verify_webhook_signature, get_pr_diff, post_pr_comment
 from services.review_service import run_review
 
@@ -26,35 +26,35 @@ async def _process_pr_review(
     pr_number: int,
     pr_title: str,
     author: str,
-    db: AsyncSession,
 ) -> None:
     """Background task to process a Pull Request review."""
     try:
-        # Fetch PR diff from GitHub
-        code_diff = get_pr_diff(repo_name, pr_number)
+        # PyGithub is synchronous — run it in a thread so it doesn't block the event loop
+        code_diff = await asyncio.to_thread(get_pr_diff, repo_name, pr_number)
 
         if not code_diff or code_diff.strip() == "":
             logger.warning(f"Empty diff for {repo_name}#{pr_number}, skipping review")
             return
 
-        # Run the multi-agent review pipeline
-        result = await run_review(
-            db=db,
-            pr_url=pr_url,
-            repo_name=repo_name,
-            pr_number=pr_number,
-            pr_title=pr_title,
-            author=author,
-            code_diff=code_diff,
-        )
+        # Background tasks run after the request's own session is closed, so use a dedicated one
+        async with async_session_factory() as db:
+            result = await run_review(
+                db=db,
+                pr_url=pr_url,
+                repo_name=repo_name,
+                pr_number=pr_number,
+                pr_title=pr_title,
+                author=author,
+                code_diff=code_diff,
+            )
 
         # Post review comment on the PR
-        post_pr_comment(repo_name, pr_number, result)
+        await asyncio.to_thread(post_pr_comment, repo_name, pr_number, result)
 
         logger.info(f"✅ Review complete for {repo_name}#{pr_number}")
 
-    except Exception as e:
-        logger.error(f"❌ Review failed for {repo_name}#{pr_number}: {e}")
+    except Exception:
+        logger.exception(f"❌ Review failed for {repo_name}#{pr_number}")
 
 
 @router.post(
@@ -65,7 +65,6 @@ async def _process_pr_review(
 async def github_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """
     Receive and process GitHub webhook events.
@@ -122,7 +121,6 @@ async def github_webhook(
             pr_number=pr_number,
             pr_title=pr_title,
             author=author,
-            db=db,
         )
 
         return {
